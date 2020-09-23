@@ -80,21 +80,29 @@ def set_param_groups(net, lr_mult_dict):
 
     return params
 
-def get_centers(net, dataloader, num_classes, key='feat'):        
-    centers = 0 
+# def get_centers(net1, dataloader, num_classes, key='feat'):
+def get_centers(net1, net2, dataloader, num_classes, key='feat'):
+    centers = 0
     refs = to_cuda(torch.LongTensor(range(num_classes)).unsqueeze(1))
     for sample in iter(dataloader):
         data = to_cuda(sample['Img'])
         gt = to_cuda(sample['Label'])
         batch_size = data.size(0)
 
-        output = net.forward(data)[key]
-        feature = output.data 
-        feat_len = feature.size(1)
+        # output = net.forward(data)[key]
+        output1 = net1.forward(data)[key]
+        output2 = net2.forward(data)[key]
+        # feature = output.data
+        feature1 = output1.data
+        feature2 = output2.data
+        feat_len = feature1.size(1)
     
         gt = gt.unsqueeze(0).expand(num_classes, -1)
         mask = (gt == refs).unsqueeze(2).type(torch.cuda.FloatTensor)
-        feature = feature.unsqueeze(0)
+        # feature = feature.unsqueeze(0)
+        feature1 = feature1.unsqueeze(0)
+        feature2 = feature2.unsqueeze(0)
+        feature = (feature1 + feature2) / 2
         # update centers
         centers += torch.sum(feature * mask, dim=1)
 

@@ -59,7 +59,8 @@ class Clustering(object):
         _, col_ind = linear_sum_assignment(cost)
         return col_ind
 
-    def collect_samples(self, net, loader):
+    # def collect_samples(self, net, loader):
+    def collect_samples(self, net1, net2, loader):
         data_feat, data_gt, data_paths = [], [], []
         for sample in iter(loader): 
             data = sample['Img'].cuda()
@@ -67,8 +68,11 @@ class Clustering(object):
             if 'Label' in sample.keys():
                 data_gt += [to_cuda(sample['Label'])]
 
-            output = net.forward(data)
-            feature = output[self.feat_key].data 
+            # output = net.forward(data)
+            output1 = net1.forward(data)
+            output2 = net2.forward(data)
+            output = (output1 + output2) / 2
+            feature = output[self.feat_key].data
             data_feat += [feature]
             
         self.samples['data'] = data_paths
@@ -76,11 +80,13 @@ class Clustering(object):
                     if len(data_gt)>0 else None
         self.samples['feature'] = torch.cat(data_feat, dim=0)
 
-    def feature_clustering(self, net, loader):
-        centers = None 
+    # def feature_clustering(self, net, loader):
+    def feature_clustering(self, net1, net2, loader):
+        centers = None
         self.stop = False 
 
-        self.collect_samples(net, loader)
+        # self.collect_samples(net, loader)
+        self.collect_samples(net1, net2, loader)
         feature = self.samples['feature']
 
         refs = to_cuda(torch.LongTensor(range(self.num_classes)).unsqueeze(1))

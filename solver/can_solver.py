@@ -86,7 +86,7 @@ class CANSolver(BaseSolver):
             with torch.no_grad():
                 # self.update_ss_alignment_loss_weight()
                 print('Clustering based on %s...' % self.source_name)
-                # 1-3 生成目标域的伪标签
+                # 1-3 生成目标域的伪标签 ,mmt 添加完成
                 self.update_labels()
                 self.clustered_target_samples = self.clustering.samples
                 target_centers = self.clustering.centers
@@ -120,35 +120,49 @@ class CANSolver(BaseSolver):
                 self.construct_categorical_dataloader(target_hypt, filtered_classes)
                 # update train data setting
                 self.compute_iters_per_loop(filtered_classes)
-
+            # 第5步之前的 mmt 添加完成
             # 5.k步更新网络参数，k-step update of network parameters through forward-backward process
             self.update_network(filtered_classes)
             self.loop += 1
 
         print('Training Done!')
 
+    # 1-3 步更新伪标签
     def update_labels(self):
-        net = self.net
-        net.eval()
+        # net = self.net
+        # net.eval()
+
+        net1 = self.net1
+        net2 = self.net2
+        net1.eval()
+        net2.eval()
+
         opt = self.opt
 
         source_dataloader = self.train_data[self.clustering_source_name]['loader']
-        net.module.set_bn_domain(self.bn_domain_map[self.source_name])
+        # net.module.set_bn_domain(self.bn_domain_map[self.source_name])
+        net1.module.set_bn_domain(self.bn_domain_map[self.source_name])
+        net2.module.set_bn_domain(self.bn_domain_map[self.source_name])
 
         # 1.用 resnet50 提取特征，聚类生成源域的聚类中心，源域类别数是聚类中心的个数
-        source_centers = solver_utils.get_centers(net,
+        # source_centers = solver_utils.get_centers(net,
+        source_centers = solver_utils.get_centers(net1, net2,
                                                   source_dataloader, self.opt.DATASET.NUM_CLASSES,
                                                   self.opt.CLUSTERING.FEAT_KEY)
         # 2.目标域的初始值赋值为源域的中心
         init_target_centers = source_centers
 
         target_dataloader = self.train_data[self.clustering_target_name]['loader']
-        net.module.set_bn_domain(self.bn_domain_map[self.target_name])
+        # net.module.set_bn_domain(self.bn_domain_map[self.target_name])
+        net1.module.set_bn_domain(self.bn_domain_map[self.target_name])
+        net2.module.set_bn_domain(self.bn_domain_map[self.target_name])
 
         # 3.在目标域上执行聚类算法，生成伪标签，我要加的 MMT 就是在生成伪标签的时候
         self.clustering.set_init_centers(init_target_centers)
-        self.clustering.feature_clustering(net, target_dataloader)
+        # self.clustering.feature_clustering(net, target_dataloader)
+        self.clustering.feature_clustering(net1, net2, target_dataloader)
 
+    #  4.过滤掉模糊的样本和类别
     def filtering(self):
         threshold = self.opt.CLUSTERING.FILTERING_THRESHOLD
         min_sn_cls = self.opt.TRAIN.MIN_SN_PER_CLASS
@@ -218,8 +232,14 @@ class CANSolver(BaseSolver):
             self.update_lr()
 
             # set the status of network
-            self.net.train()
-            self.net.zero_grad()
+            # self.net.train()
+            # self.net.zero_grad()
+            self.net1.train()
+            self.net2.train()
+            self.net1_ema.train()
+            self.net2_ema.train()
+            # self.net.zero_grad()
+            # self.net.zero_grad()
 
             loss = 0
             ce_loss_iter = 0
@@ -232,12 +252,18 @@ class CANSolver(BaseSolver):
 
             source_data = to_cuda(source_data)
             source_gt = to_cuda(source_gt)
-            self.net.module.set_bn_domain(self.bn_domain_map[self.source_name])
-            source_preds = self.net(source_data)['logits']
+            # self.net.module.set_bn_domain(self.bn_domain_map[self.source_name])
+            self.net1.module.set_bn_domain(self.bn_domain_map[self.source_name])
+            self.net2.module.set_bn_domain(self.bn_domain_map[self.source_name])
+            # source_preds = self.net(source_data)['logits']
+            source_preds1 = self.net(source_data)['logits']
+            source_preds2 = self.net(source_data)['logits']
 
             # compute the cross-entropy loss
-            ce_loss = self.CELoss(source_preds, source_gt)
-            ce_loss.backward()
+            # ce_loss = self.CELoss(source_preds, source_gt)
+            ce_loss = self.CELoss(source_preds1, source_gt) + self.CELoss(source_preds2, source_gt)
+            # ce_loss.backward()
+            total_loss = ce_loss
 
             ce_loss_iter += ce_loss
             loss += ce_loss
@@ -254,30 +280,54 @@ class CANSolver(BaseSolver):
                 target_cls_concat = torch.cat([to_cuda(samples)
                                                for samples in target_samples_cls], dim=0)
 
-                self.net.module.set_bn_domain(self.bn_domain_map[self.source_name])
-                feats_source = self.net(source_cls_concat)
-                self.net.module.set_bn_domain(self.bn_domain_map[self.target_name])
-                feats_target = self.net(target_cls_concat)
-
+                # self.net.module.set_bn_domain(self.bn_domain_map[self.source_name])
+                self.net1.module.set_bn_domain(self.bn_domain_map[self.source_name])
+                self.net2.module.set_bn_domain(self.bn_domain_map[self.source_name])
+                # feats_source = self.net(source_cls_concat)
+                feats_source1 = self.net1(source_cls_concat)
+                feats_source2 = self.net2(source_cls_concat)
+                # feats_source = (feats_source1 + feats_source2) / 2
+                # self.net.module.set_bn_domain(self.bn_domain_map[self.target_name])
+                self.net1.module.set_bn_domain(self.bn_domain_map[self.target_name])
+                self.net2.module.set_bn_domain(self.bn_domain_map[self.target_name])
+                # feats_target = self.net(target_cls_concat)
+                feats_target1 = self.net(target_cls_concat)
+                feats_target2 = self.net(target_cls_concat)
+                feats_target = (feats_target1 + feats_target2) / 2
                 # prepare the features
-                feats_toalign_S = self.prepare_feats(feats_source)
+                # feats_toalign_S = self.prepare_feats(feats_source)
+                feats_toalign_S1 = self.prepare_feats(feats_source1)
+                feats_toalign_S2 = self.prepare_feats(feats_source2)
                 feats_toalign_T = self.prepare_feats(feats_target)
 
-                cdd_loss = self.cdd.forward(feats_toalign_S, feats_toalign_T,
+                # cdd_loss = self.cdd.forward(feats_toalign_S, feats_toalign_T,
+                #                             source_nums_cls, target_nums_cls)[self.discrepancy_key]
+                cdd_loss1 = self.cdd.forward(feats_toalign_S2, feats_toalign_T,
+                                            source_nums_cls, target_nums_cls)[self.discrepancy_key]
+                cdd_loss2 = self.cdd.forward(feats_toalign_S2, feats_toalign_T,
                                             source_nums_cls, target_nums_cls)[self.discrepancy_key]
 
-                cdd_loss *= self.opt.CDD.LOSS_WEIGHT
+                # cdd_loss *= self.opt.CDD.LOSS_WEIGHT
+                cdd_loss1 *= self.opt.CDD.LOSS_WEIGHT
+                cdd_loss2 *= self.opt.CDD.LOSS_WEIGHT
+                cdd_loss = cdd_loss1 + cdd_loss2
                 cdd_loss.backward()
 
                 cdd_loss_iter += cdd_loss
                 loss += cdd_loss
+                total_loss += cdd_loss
 
             # update the network
+            self.optimizer.zero_grad()
+            total_loss.backward()
             self.optimizer.step()
 
             if self.opt.TRAIN.LOGGING and (update_iters + 1) % \
                     (max(1, self.iters_per_loop // self.opt.TRAIN.NUM_LOGGING_PER_LOOP)) == 0:
-                accu = self.model_eval(source_preds, source_gt)
+                # accu = self.model_eval(source_preds, source_gt)
+                accu1 = self.model_eval(source_preds1, source_gt)
+                accu2 = self.model_eval(source_preds2, source_gt)
+                accu = (accu1 + accu2) / 2
                 cur_loss = {'ce_loss': ce_loss_iter, 'cdd_loss': cdd_loss_iter,
                             'total_loss': loss}
                 self.logging(cur_loss, accu)

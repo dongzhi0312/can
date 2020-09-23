@@ -85,7 +85,23 @@ def train(args):
         bn_domain_map = param_dict['bn_domain_map']
         fx_pretrained = False
 
-    net = model.danet(num_classes=cfg.DATASET.NUM_CLASSES,
+    # net = model.danet(num_classes=cfg.DATASET.NUM_CLASSES,
+    #                   state_dict=model_state_dict,
+    #                   feature_extractor=cfg.MODEL.FEATURE_EXTRACTOR,
+    #                   frozen=[cfg.TRAIN.STOP_GRAD],
+    #                   fx_pretrained=fx_pretrained,
+    #                   dropout_ratio=cfg.TRAIN.DROPOUT_RATIO,
+    #                   fc_hidden_dims=cfg.MODEL.FC_HIDDEN_DIMS,
+    #                   num_domains_bn=num_domains_bn)
+    net1 = model.danet(num_classes=cfg.DATASET.NUM_CLASSES,
+                      state_dict=model_state_dict,
+                      feature_extractor=cfg.MODEL.FEATURE_EXTRACTOR,
+                      frozen=[cfg.TRAIN.STOP_GRAD],
+                      fx_pretrained=fx_pretrained,
+                      dropout_ratio=cfg.TRAIN.DROPOUT_RATIO,
+                      fc_hidden_dims=cfg.MODEL.FC_HIDDEN_DIMS,
+                      num_domains_bn=num_domains_bn)
+    net2 = model.danet(num_classes=cfg.DATASET.NUM_CLASSES,
                       state_dict=model_state_dict,
                       feature_extractor=cfg.MODEL.FEATURE_EXTRACTOR,
                       frozen=[cfg.TRAIN.STOP_GRAD],
@@ -94,12 +110,17 @@ def train(args):
                       fc_hidden_dims=cfg.MODEL.FC_HIDDEN_DIMS,
                       num_domains_bn=num_domains_bn)
 
-    net = torch.nn.DataParallel(net)
+    # net = torch.nn.DataParallel(net)
+    net1 = torch.nn.DataParallel(net1)
+    net2 = torch.nn.DataParallel(net2)
     if torch.cuda.is_available():
-        net.cuda()
+        # net.cuda()
+        net1.cuda()
+        net2.cuda()
 
     # initialize solver
-    train_solver = Solver(net, dataloaders, bn_domain_map=bn_domain_map, resume=resume_dict)
+    # train_solver = Solver(net, dataloaders, bn_domain_map=bn_domain_map, resume=resume_dict)
+    train_solver = Solver(net1, net2, dataloaders, bn_domain_map=bn_domain_map, resume=resume_dict)
 
     # train 
     train_solver.solve()

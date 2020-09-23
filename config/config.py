@@ -35,7 +35,7 @@ __C.DATA_TRANSFORM.NORMALIZE_STD = (0.229, 0.224, 0.225)
 __C.TRAIN = edict()
 # batch size setting
 __C.TRAIN.SOURCE_BATCH_SIZE = 30
-__C.TRAIN.TARGET_BATCH_SIZE = 30 
+__C.TRAIN.TARGET_BATCH_SIZE = 30
 __C.TRAIN.TARGET_CLASS_BATCH_SIZE = 3
 __C.TRAIN.SOURCE_CLASS_BATCH_SIZE = 3
 __C.TRAIN.NUM_SELECTED_CLASSES = 10
@@ -53,8 +53,8 @@ __C.TRAIN.MAX_LOOP = 50
 __C.TRAIN.STOP_THRESHOLDS = (0.001, 0.001, 0.001)
 __C.TRAIN.MIN_SN_PER_CLASS = 3
 __C.TRAIN.LOGGING = True
-__C.TRAIN.TEST_INTERVAL = 1.0 # percentage of total iterations each loop
-__C.TRAIN.SAVE_CKPT_INTERVAL = 1.0 # percentage of total iterations in each loop
+__C.TRAIN.TEST_INTERVAL = 1.0  # percentage of total iterations each loop
+__C.TRAIN.SAVE_CKPT_INTERVAL = 1.0  # percentage of total iterations in each loop
 __C.TRAIN.NUM_LOGGING_PER_LOOP = 6.0
 __C.TRAIN.UPDATE_EPOCH_PERCENTAGE = 1.0
 
@@ -70,7 +70,6 @@ __C.INV.BETA = 0.75
 __C.EXP = edict()
 __C.EXP.LR_DECAY_RATE = 0.1
 __C.EXP.LR_DECAY_STEP = 30
-
 
 # Clustering options
 __C.CLUSTERING = edict()
@@ -109,10 +108,11 @@ __C.TEST.DOMAIN = ''
 # MISC
 __C.WEIGHTS = ''
 __C.RESUME = ''
-__C.EVAL_METRIC = "accuracy" # "mean_accu" as alternative
+__C.EVAL_METRIC = "accuracy"  # "mean_accu" as alternative
 __C.EXP_NAME = 'exp'
 __C.SAVE_DIR = ''
 __C.NUM_WORKERS = 3
+
 
 def _merge_a_into_b(a, b):
     """Merge config dictionary a into config dictionary b, clobbering the
@@ -134,8 +134,8 @@ def _merge_a_into_b(a, b):
                 v = np.array(v, dtype=b[k].dtype)
             else:
                 raise ValueError(('Type mismatch ({} vs. {}) '
-                                'for config key: {}').format(type(b[k]),
-                                                            type(v), k))
+                                  'for config key: {}').format(type(b[k]),
+                                                               type(v), k))
 
         # recursively merge dicts
         if type(v) is edict:
@@ -147,6 +147,7 @@ def _merge_a_into_b(a, b):
         else:
             b[k] = v
 
+
 def cfg_from_file(filename):
     """Load a config file and merge it into the default options."""
     import yaml
@@ -154,6 +155,7 @@ def cfg_from_file(filename):
         yaml_cfg = edict(yaml.load(f, Loader=yaml.FullLoader))
 
     _merge_a_into_b(yaml_cfg, __C)
+
 
 def cfg_from_list(cfg_list):
     """Set config keys via list (e.g., from command line)."""
@@ -174,5 +176,5 @@ def cfg_from_list(cfg_list):
             value = v
         assert type(value) == type(d[subkey]), \
             'type {} does not match original type {}'.format(
-            type(value), type(d[subkey]))
+                type(value), type(d[subkey]))
         d[subkey] = value
